@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node /Users/sakshinairani/Desktop/ecom/backend/server.js)",
+      "Bash(echo \"Backend PID: $!\")"
+    ]
+  }
+}
