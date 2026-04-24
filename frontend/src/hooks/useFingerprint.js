@@ -1,17 +1,24 @@
 import { useEffect, useRef } from 'react';
 
-const FP_PUBLIC_KEY = import.meta.env.VITE_FP_PUBLIC_KEY;
-const isKeyConfigured = FP_PUBLIC_KEY && FP_PUBLIC_KEY !== 'your_fingerprint_public_key_here';
+// Cloudflare-proxied URLs — requests go through sakshin-fingerprint.com,
+// never directly to Fingerprint's CDN (bypasses ad blockers, first-party cookies)
+const AGENT_SCRIPT_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/web/v4/srQToUlzaoXoBGyRBekj';
+const ENDPOINT_URL     = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/?region=ap';
 
 // Singleton promise — initialize once across the whole app
 let fpPromise = null;
 
 function initFingerprint() {
-  if (!isKeyConfigured) return null;
   if (!fpPromise) {
     // eslint-disable-next-line no-new-func
-    fpPromise = new Function('key', `return import('https://fpjscdn.net/v4/' + key)`)(FP_PUBLIC_KEY)
-      .then(Fingerprint => Fingerprint.start({ region: 'ap' }))
+    fpPromise = new Function(`return import('${AGENT_SCRIPT_URL}')`)()
+      .then(Fingerprint => Fingerprint.start({
+        region: 'ap',
+        endpoints: [
+          ENDPOINT_URL,
+          Fingerprint.defaultEndpoint, // fallback to Fingerprint's CDN if proxy is down
+        ],
+      }))
       .catch(err => {
         console.warn('[Fingerprint] Init failed:', err.message);
         fpPromise = null;
@@ -33,21 +40,15 @@ export function useFingerprint() {
 
   /**
    * Returns { eventId, sealedResult } from the JS agent.
-   * sealedResult is a base64 string when Sealed Client Results is enabled
-   * in the Fingerprint dashboard; null otherwise.
-   * eventId is the request/event ID for Server API fallback.
+   * sealedResult is a base64 string when Sealed Client Results is enabled.
    */
   const getEventId = async () => {
-    if (!isKeyConfigured) return { eventId: null, sealedResult: null };
     try {
       const fp = fpRef.current || await initFingerprint();
       if (!fp) return { eventId: null, sealedResult: null };
       const result = await fp.get();
 
       const eventId = result.event_id ?? result.requestId ?? null;
-
-      // sealed_result is a BinaryOutput object when the feature is enabled
-      // in the Fingerprint dashboard — call .base64() to get a string
       const sealedResult = result.sealed_result
         ? result.sealed_result.base64()
         : null;
@@ -59,5 +60,5 @@ export function useFingerprint() {
     }
   };
 
-  return { getEventId, isConfigured: isKeyConfigured };
+  return { getEventId, isConfigured: true };
 }
