@@ -60,7 +60,10 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="border-t border-stone-100 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-stone-400">
-            © 2024 LUXE. All rights reserved.
+            © 2026 LUXE. All rights reserved.
+          </p>
+          <p className="text-xs text-stone-400">
+            Built by <span className="font-medium text-stone-600">Sakshin S Airani</span>
           </p>
           <p className="text-xs text-stone-400 flex items-center gap-1.5">
             Fraud protection by

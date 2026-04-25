@@ -18,6 +18,11 @@ function initFingerprint() {
           ENDPOINT_URL,
           Fingerprint.defaultEndpoint, // fallback to Fingerprint's CDN if proxy is down
         ],
+        // Cache visitor ID in sessionStorage for up to 1 hour to reduce API calls
+        cache: {
+          storage: 'sessionStorage',
+          duration: 'optimize-cost',
+        },
       }))
       .catch(err => {
         console.warn('[Fingerprint] Init failed:', err.message);
@@ -39,14 +44,26 @@ export function useFingerprint() {
   }, []);
 
   /**
-   * Returns { eventId, sealedResult } from the JS agent.
+   * Capture a Fingerprint event.
+   *
+   * @param {string}  linkedId - searchable ID to link event to a business entity
+   *                             e.g. order ID, user email
+   * @param {object}  tag      - arbitrary metadata stored with the event
+   *                             e.g. { action, items, total }
+   *
+   * Returns { eventId, sealedResult }
    * sealedResult is a base64 string when Sealed Client Results is enabled.
    */
-  const getEventId = async () => {
+  const getEventId = async (linkedId = null, tag = null) => {
     try {
       const fp = fpRef.current || await initFingerprint();
       if (!fp) return { eventId: null, sealedResult: null };
-      const result = await fp.get();
+
+      const options = {};
+      if (linkedId) options.linkedId = linkedId;
+      if (tag)      options.tag      = tag;
+
+      const result = await fp.get(options);
 
       const eventId = result.event_id ?? result.requestId ?? null;
       const sealedResult = result.sealed_result
