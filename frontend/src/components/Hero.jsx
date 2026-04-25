@@ -17,7 +17,7 @@ export default function Hero({ onShopNow }) {
       <div className="relative max-w-7xl mx-auto px-6 flex flex-col justify-center h-full" style={{ minHeight: '88vh' }}>
         <div className="max-w-2xl">
           <p className="text-xs font-medium tracking-[0.25em] uppercase text-amber-400 mb-5">
-            New Collection — Spring 2024
+            New Collection — Spring 2026
           </p>
 
           <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl font-semibold leading-[1.05] mb-7">
