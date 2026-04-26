@@ -1,34 +1,34 @@
 import { useEffect, useRef } from 'react';
+import * as Fingerprint from '@fingerprint/agent';
 
-// Cloudflare-proxied URLs — requests go through sakshin-fingerprint.com,
+// Cloudflare-proxied endpoint — requests go through sakshin-fingerprint.com,
 // never directly to Fingerprint's CDN (bypasses ad blockers, first-party cookies)
-const AGENT_SCRIPT_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/web/v4/srQToUlzaoXoBGyRBekj';
-const ENDPOINT_URL     = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/?region=ap';
+const ENDPOINT_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/?region=ap';
 
 // Singleton promise — initialize once across the whole app
 let fpPromise = null;
 
 function initFingerprint() {
   if (!fpPromise) {
-    // eslint-disable-next-line no-new-func
-    fpPromise = new Function(`return import('${AGENT_SCRIPT_URL}')`)()
-      .then(Fingerprint => Fingerprint.start({
+    fpPromise = Promise.resolve(
+      Fingerprint.start({
+        apiKey: 'srQToUlzaoXoBGyRBekj',
         region: 'ap',
         endpoints: [
           ENDPOINT_URL,
           Fingerprint.defaultEndpoint, // fallback to Fingerprint's CDN if proxy is down
         ],
-        // Cache visitor ID in sessionStorage for up to 1 hour to reduce API calls
+        // Cache visitor ID in sessionStorage to reduce API calls
         cache: {
           storage: 'sessionStorage',
           duration: 'optimize-cost',
         },
-      }))
-      .catch(err => {
-        console.warn('[Fingerprint] Init failed:', err.message);
-        fpPromise = null;
-        return null;
-      });
+      })
+    ).catch(err => {
+      console.warn('[Fingerprint] Init failed:', err.message);
+      fpPromise = null;
+      return null;
+    });
   }
   return fpPromise;
 }
