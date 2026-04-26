@@ -76,7 +76,15 @@ export default function CheckoutModal({ onClose, toast }) {
   const handlePlaceOrder = async () => {
     setOrderLoading(true);
     try {
-      const { eventId: fingerprintEventId, sealedResult } = await getEventId();
+      const linkedId = items.map(i => i.name).join(', ');
+      const tag = {
+        action:    'place_order',
+        items:     items.map(i => ({ name: i.name, qty: i.quantity, price: i.price })),
+        total:     total.toFixed(2),
+        coupon:    appliedCoupon?.code ?? null,
+        userEmail: user?.email ?? null,
+      };
+      const { eventId: fingerprintEventId, sealedResult } = await getEventId(linkedId, tag);
       eventIdRef.current = fingerprintEventId;          // save for OTP phase
       sealedResultRef.current = sealedResult;           // save for OTP phase
 
