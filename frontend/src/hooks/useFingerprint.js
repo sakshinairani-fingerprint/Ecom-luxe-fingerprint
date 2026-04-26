@@ -1,65 +1,54 @@
-import { useRef } from 'react';
-import { start } from '@fingerprint/agent';
+import { useEffect, useRef } from 'react';
 
-// Cloudflare-proxied base URL — npm package appends /web/v4/{apiKey} automatically.
-// Full resolved script URL: sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/web/v4/srQToUlzaoXoBGyRBekj
-const PROXY_BASE_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/';
+// Cloudflare-proxied URLs — requests go through sakshin-fingerprint.com,
+// never directly to Fingerprint's CDN (bypasses ad blockers, first-party cookies)
+const AGENT_SCRIPT_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/web/v4/srQToUlzaoXoBGyRBekj';
+const ENDPOINT_URL     = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/?region=ap';
 
-// start() is synchronous in v4 — returns a lazy fp object immediately.
-// Actual script loading happens on first fp.get() call.
-let fpClient = null;
+// Singleton promise — initialize once across the whole app
+let fpPromise = null;
 
-function getClient() {
-  if (!fpClient) {
-    try {
-      fpClient = start({
-        apiKey: 'srQToUlzaoXoBGyRBekj',
+function initFingerprint() {
+  if (!fpPromise) {
+    // eslint-disable-next-line no-new-func
+    fpPromise = new Function(`return import('${AGENT_SCRIPT_URL}')`)()
+      .then(Fingerprint => Fingerprint.start({
         region: 'ap',
-        endpoints: [PROXY_BASE_URL],
-        cache: {
-          storage: 'sessionStorage',
-          duration: 'optimize-cost',
-        },
+        endpoints: [ENDPOINT_URL],
+      }))
+      .catch(err => {
+        console.warn('[Fingerprint] Init failed:', err.message);
+        fpPromise = null;
+        return null;
       });
-    } catch (err) {
-      console.warn('[Fingerprint] start() failed:', err.message);
-    }
   }
-  return fpClient;
+  return fpPromise;
 }
 
 export function useFingerprint() {
-  // Keep a ref so the hook is stable across renders
-  const clientRef = useRef(null);
-  if (!clientRef.current) {
-    clientRef.current = getClient();
-  }
+  const fpRef = useRef(null);
+
+  useEffect(() => {
+    const promise = initFingerprint();
+    if (promise) {
+      promise.then(fp => { fpRef.current = fp; });
+    }
+  }, []);
 
   /**
-   * Capture a Fingerprint event.
-   *
-   * @param {string}  linkedId - searchable ID to link event to a business entity
-   *                             e.g. order ID, user email
-   * @param {object}  tag      - arbitrary metadata stored with the event
-   *                             e.g. { action, items, total }
-   *
-   * Returns { eventId, sealedResult }
+   * Returns { eventId, sealedResult } from the JS agent.
    * sealedResult is a base64 string when Sealed Client Results is enabled.
    */
-  const getEventId = async (linkedId = null, tag = null) => {
+  const getEventId = async () => {
     try {
-      const fp = clientRef.current || getClient();
+      const fp = fpRef.current || await initFingerprint();
       if (!fp) return { eventId: null, sealedResult: null };
+      const result = await fp.get();
 
-      const options = {};
-      if (linkedId) options.linkedId = linkedId;
-      if (tag)      options.tag      = tag;
-
-      const result = await fp.get(options);
-
-      // v4 npm package uses camelCase field names
-      const eventId      = result.requestId ?? null;
-      const sealedResult = result.sealedResult ?? null;
+      const eventId = result.event_id ?? result.requestId ?? null;
+      const sealedResult = result.sealed_result
+        ? result.sealed_result.base64()
+        : null;
 
       return { eventId, sealedResult };
     } catch (err) {
