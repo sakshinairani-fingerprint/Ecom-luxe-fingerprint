@@ -1,47 +1,39 @@
-import { useEffect, useRef } from 'react';
-import * as Fingerprint from '@fingerprint/agent';
+import { useRef } from 'react';
+import { start } from '@fingerprint/agent';
 
-// Cloudflare-proxied endpoint — requests go through sakshin-fingerprint.com,
-// never directly to Fingerprint's CDN (bypasses ad blockers, first-party cookies)
-const ENDPOINT_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/?region=ap';
+// Cloudflare-proxied base URL — npm package appends /web/v4/{apiKey} automatically.
+// Full resolved script URL: sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/web/v4/srQToUlzaoXoBGyRBekj
+const PROXY_BASE_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/';
 
-// Singleton promise — initialize once across the whole app
-let fpPromise = null;
+// start() is synchronous in v4 — returns a lazy fp object immediately.
+// Actual script loading happens on first fp.get() call.
+let fpClient = null;
 
-function initFingerprint() {
-  if (!fpPromise) {
-    fpPromise = Promise.resolve(
-      Fingerprint.start({
+function getClient() {
+  if (!fpClient) {
+    try {
+      fpClient = start({
         apiKey: 'srQToUlzaoXoBGyRBekj',
         region: 'ap',
-        endpoints: [
-          ENDPOINT_URL,
-          Fingerprint.defaultEndpoint, // fallback to Fingerprint's CDN if proxy is down
-        ],
-        // Cache visitor ID in sessionStorage to reduce API calls
+        endpoints: [PROXY_BASE_URL],
         cache: {
           storage: 'sessionStorage',
           duration: 'optimize-cost',
         },
-      })
-    ).catch(err => {
-      console.warn('[Fingerprint] Init failed:', err.message);
-      fpPromise = null;
-      return null;
-    });
+      });
+    } catch (err) {
+      console.warn('[Fingerprint] start() failed:', err.message);
+    }
   }
-  return fpPromise;
+  return fpClient;
 }
 
 export function useFingerprint() {
-  const fpRef = useRef(null);
-
-  useEffect(() => {
-    const promise = initFingerprint();
-    if (promise) {
-      promise.then(fp => { fpRef.current = fp; });
-    }
-  }, []);
+  // Keep a ref so the hook is stable across renders
+  const clientRef = useRef(null);
+  if (!clientRef.current) {
+    clientRef.current = getClient();
+  }
 
   /**
    * Capture a Fingerprint event.
@@ -56,7 +48,7 @@ export function useFingerprint() {
    */
   const getEventId = async (linkedId = null, tag = null) => {
     try {
-      const fp = fpRef.current || await initFingerprint();
+      const fp = clientRef.current || getClient();
       if (!fp) return { eventId: null, sealedResult: null };
 
       const options = {};
@@ -65,10 +57,9 @@ export function useFingerprint() {
 
       const result = await fp.get(options);
 
-      const eventId = result.event_id ?? result.requestId ?? null;
-      const sealedResult = result.sealed_result
-        ? result.sealed_result.base64()
-        : null;
+      // v4 npm package uses camelCase field names
+      const eventId      = result.requestId ?? null;
+      const sealedResult = result.sealedResult ?? null;
 
       return { eventId, sealedResult };
     } catch (err) {
