@@ -94,7 +94,13 @@ export default function CheckoutModal({ onClose, toast }) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ fingerprintEventId, sealedResult }),
+        body: JSON.stringify({
+          fingerprintEventId,
+          sealedResult,
+          items: items.map(i => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+          total,
+          couponCode: appliedCoupon?.code ?? null,
+        }),
       });
       const data = await res.json();
 
@@ -142,6 +148,9 @@ export default function CheckoutModal({ onClose, toast }) {
           fingerprintEventId: eventIdRef.current,
           sealedResult: sealedResultRef.current,
           otpCode,
+          items: items.map(i => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+          total,
+          couponCode: appliedCoupon?.code ?? null,
         }),
       });
       const data = await res.json();

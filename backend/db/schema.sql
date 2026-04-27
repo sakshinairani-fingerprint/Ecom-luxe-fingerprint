@@ -57,6 +57,20 @@ CREATE TABLE IF NOT EXISTS fingerprint_events (
   created_at    TIMESTAMP DEFAULT NOW()
 );
 
+-- Orders (every attempt — placed and rejected)
+CREATE TABLE IF NOT EXISTS orders (
+  id                   SERIAL PRIMARY KEY,
+  user_id              INTEGER REFERENCES users(id),
+  visitor_id           VARCHAR(255),
+  fingerprint_event_id VARCHAR(255),
+  items                JSONB,
+  total                DECIMAL(10,2),
+  coupon_code          VARCHAR(50),
+  status               VARCHAR(20) NOT NULL,   -- 'placed' | 'rejected'
+  rejection_reason     VARCHAR(100),           -- null when placed
+  created_at           TIMESTAMP DEFAULT NOW()
+);
+
 -- Verified visitors (device trust — OTP auto-verify)
 CREATE TABLE IF NOT EXISTS verified_visitors (
   id          SERIAL PRIMARY KEY,
