@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { preloadFingerprint } from './hooks/useFingerprint.js';
 import { CartProvider } from './context/CartContext.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Navbar from './components/Navbar.jsx';
@@ -13,6 +14,10 @@ import { Toast } from './components/Toast.jsx';
 
 function AppContent() {
   const { isIncognito } = useAuth();
+
+  // Kick off Fingerprint start + get on page load so the result is ready
+  // before the user interacts with auth or checkout
+  useEffect(() => { preloadFingerprint(); }, []);
   const [showAuth, setShowAuth] = useState(false);
   const [authTab, setAuthTab] = useState('login');
   const [showCheckout, setShowCheckout] = useState(false);

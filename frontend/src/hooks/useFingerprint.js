@@ -5,12 +5,19 @@ import { useEffect, useRef } from 'react';
 const AGENT_SCRIPT_URL = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/web/v4/srQToUlzaoXoBGyRBekj';
 const ENDPOINT_URL     = 'https://sakshin-fingerprint.com/nuaIKzq7gtpoWCv7/?region=ap';
 
-// Singleton promise — initialize once across the whole app
-let fpPromise = null;
+// Module-level singletons — shared across all hook instances
+let fpPromise        = null; // resolves to the fp client
+let prefetchedResult = null; // { eventId, sealedResult } from page-load get()
+
+function parseResult(result) {
+  return {
+    eventId:      result.event_id ?? result.requestId ?? null,
+    sealedResult: result.sealed_result ? result.sealed_result.base64() : null,
+  };
+}
 
 function initFingerprint() {
   if (!fpPromise) {
-    // eslint-disable-next-line no-new-func
     fpPromise = new Function(`return import('${AGENT_SCRIPT_URL}')`)()
       .then(Fingerprint => Fingerprint.start({
         region: 'ap',
@@ -20,6 +27,14 @@ function initFingerprint() {
           duration: 'optimize-cost',
         },
       }))
+      .then(fp => {
+        if (!fp) return null;
+        // Immediately fire get() after start — store result so callers don't wait
+        fp.get()
+          .then(result => { prefetchedResult = parseResult(result); })
+          .catch(() => {});
+        return fp;
+      })
       .catch(err => {
         console.warn('[Fingerprint] Init failed:', err.message);
         fpPromise = null;
@@ -27,6 +42,11 @@ function initFingerprint() {
       });
   }
   return fpPromise;
+}
+
+// Called from App on page load to kick off start + get in the background
+export function preloadFingerprint() {
+  initFingerprint();
 }
 
 export function useFingerprint() {
@@ -39,25 +59,26 @@ export function useFingerprint() {
     }
   }, []);
 
-  /**
-   * Returns { eventId, sealedResult } from the JS agent.
-   * sealedResult is a base64 string when Sealed Client Results is enabled.
-   */
   const getEventId = async (linkedId = null, tag = null) => {
     try {
       const fp = fpRef.current || await initFingerprint();
       if (!fp) return { eventId: null, sealedResult: null };
+
+      // Auth / coupon — no metadata needed, return pre-fetched result instantly
+      if (!linkedId && !tag) {
+        if (prefetchedResult) return prefetchedResult;
+        // Pre-fetch hasn't resolved yet (user was very fast) — wait for it
+        const result = await fp.get();
+        prefetchedResult = parseResult(result);
+        return prefetchedResult;
+      }
+
+      // Orders — linkedId/tag create a new event with metadata, always fresh
       const options = {};
       if (linkedId) options.linkedId = linkedId;
       if (tag)      options.tag      = tag;
       const result = await fp.get(options);
-
-      const eventId = result.event_id ?? result.requestId ?? null;
-      const sealedResult = result.sealed_result
-        ? result.sealed_result.base64()
-        : null;
-
-      return { eventId, sealedResult };
+      return parseResult(result);
     } catch (err) {
       console.warn('[Fingerprint] get() failed:', err.message);
       return { eventId: null, sealedResult: null };
